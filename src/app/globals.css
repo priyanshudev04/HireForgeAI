@@ -2,129 +2,439 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+/* ============================================================
+   DARK VARIANT
+   class-based dark mode (.dark class on <html>)
+   ============================================================ */
 @custom-variant dark (&:is(.dark *));
 
+/* ============================================================
+   THEME INLINE MAP
+   Maps CSS custom properties → Tailwind design tokens
+   ============================================================ */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
+  /* ── Colour tokens ── */
+  --color-background:              var(--background);
+  --color-foreground:              var(--foreground);
+
+  --color-surface:                 var(--surface);
+  --color-surface-glass:           var(--surface-glass);
+
+  --color-card:                    var(--card);
+  --color-card-foreground:         var(--card-foreground);
+
+  --color-popover:                 var(--popover);
+  --color-popover-foreground:      var(--popover-foreground);
+
+  --color-primary:                 var(--primary);
+  --color-primary-foreground:      var(--primary-foreground);
+
+  --color-accent:                  var(--accent);
+  --color-accent-foreground:       var(--accent-foreground);
+
+  --color-secondary:               var(--secondary);
+  --color-secondary-foreground:    var(--secondary-foreground);
+
+  --color-muted:                   var(--muted);
+  --color-muted-foreground:        var(--muted-foreground);
+
+  --color-destructive:             var(--destructive);
+  --color-destructive-foreground:  var(--destructive-foreground);
+
+  --color-border:                  var(--border);
+  --color-border-glass:            var(--border-glass);
+  --color-input:                   var(--input);
+  --color-ring:                    var(--ring);
+
+  /* ── Semantic / status colours ── */
+  --color-success:                 var(--success);
+  --color-success-foreground:      var(--success-foreground);
+  --color-warning:                 var(--warning);
+  --color-warning-foreground:      var(--warning-foreground);
+  --color-error:                   var(--error);
+  --color-error-foreground:        var(--error-foreground);
+  --color-info:                    var(--info);
+  --color-info-foreground:         var(--info-foreground);
+
+  /* ── Difficulty semantic colours (PRD Part 7) ── */
+  --color-difficulty-easy:         var(--difficulty-easy);
+  --color-difficulty-medium:       var(--difficulty-medium);
+  --color-difficulty-hard:         var(--difficulty-hard);
+
+  /* ── Text colours ── */
+  --color-text-primary:            var(--text-primary);
+  --color-text-secondary:          var(--text-secondary);
+  --color-text-muted:              var(--text-muted);
+
+  /* ── Chart colours ── */
+  --color-chart-1:                 var(--chart-1);
+  --color-chart-2:                 var(--chart-2);
+  --color-chart-3:                 var(--chart-3);
+  --color-chart-4:                 var(--chart-4);
+  --color-chart-5:                 var(--chart-5);
+
+  /* ── Sidebar colours ── */
+  --color-sidebar:                 var(--sidebar);
+  --color-sidebar-foreground:      var(--sidebar-foreground);
+  --color-sidebar-primary:         var(--sidebar-primary);
   --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
-  --color-ring: var(--ring);
-  --color-input: var(--input);
-  --color-border: var(--border);
-  --color-destructive: var(--destructive);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-accent: var(--accent);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-muted: var(--muted);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-secondary: var(--secondary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-primary: var(--primary);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
-  --color-card-foreground: var(--card-foreground);
-  --color-card: var(--card);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+  --color-sidebar-accent:          var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border:          var(--sidebar-border);
+  --color-sidebar-ring:            var(--sidebar-ring);
+
+  /* ── Typography tokens (PRD Part 21) ── */
+  --font-sans:                     var(--font-geist-sans);
+  --font-mono:                     var(--font-geist-mono);
+  --font-heading:                  var(--font-geist-sans);
+
+  /* ── Radius tokens (PRD Part 21) ── */
+  --radius-sm:                     var(--radius-sm-val);
+  --radius-md:                     var(--radius-md-val);
+  --radius-lg:                     var(--radius-lg-val);
+  --radius-xl:                     var(--radius-xl-val);
+  --radius-2xl:                    var(--radius-2xl-val);
+  --radius-full:                   9999px;
+
+  /* ── Shadow tokens (PRD Part 21) ── */
+  --shadow-sm:                     var(--shadow-sm-val);
+  --shadow-md:                     var(--shadow-md-val);
+  --shadow-lg:                     var(--shadow-lg-val);
+
+  /* ── Animation / transition tokens (PRD Part 21) ── */
+  --duration-fast:                 100ms;
+  --duration-base:                 200ms;
+  --duration-slow:                 300ms;
+  --easing-out:                    cubic-bezier(0, 0, 0.2, 1);
+  --easing-in:                     cubic-bezier(0.4, 0, 1, 1);
+  --easing-in-out:                 cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ── Opacity tokens (PRD Part 21) ── */
+  --opacity-disabled:              0.5;
+  --opacity-glass-surface:         0.08;
+  --opacity-hover-overlay:         0.06;
+
+  /* ── Container tokens (PRD Part 21) ── */
+  --container-reading:             68ch;
+  --container-app:                 1280px;
+  --container-wide:                1920px;
 }
 
+/* ============================================================
+   LIGHT THEME ( :root )
+   Dark-first product — light theme is V1 placeholder only
+   per PRD Part 7 / Part 25 Decision: Dark Theme
+   ============================================================ */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
+  /* Raw colour palette */
+  --background:               oklch(1 0 0);
+  --foreground:               oklch(0.145 0 0);
+
+  --surface:                  oklch(0.97 0 0);
+  --surface-glass:            oklch(0.97 0 0 / 0.85);
+
+  --card:                     oklch(1 0 0);
+  --card-foreground:          oklch(0.145 0 0);
+
+  --popover:                  oklch(1 0 0);
+  --popover-foreground:       oklch(0.145 0 0);
+
+  /* Primary: Electric Blue range  (PRD Part 7) */
+  --primary:                  oklch(0.55 0.22 264);
+  --primary-foreground:       oklch(0.985 0 0);
+
+  /* Accent: Cyan range (PRD Part 7) */
+  --accent:                   oklch(0.80 0.15 196);
+  --accent-foreground:        oklch(0.145 0 0);
+
+  --secondary:                oklch(0.97 0 0);
+  --secondary-foreground:     oklch(0.205 0 0);
+
+  --muted:                    oklch(0.97 0 0);
+  --muted-foreground:         oklch(0.556 0 0);
+
+  --destructive:              oklch(0.577 0.245 27.325);
+  --destructive-foreground:   oklch(0.985 0 0);
+
+  --border:                   oklch(0.922 0 0);
+  --border-glass:             oklch(1 0 0 / 0.12);
+  --input:                    oklch(0.922 0 0);
+  --ring:                     oklch(0.55 0.22 264);
+
+  /* Semantic colours */
+  --success:                  oklch(0.65 0.18 145);
+  --success-foreground:       oklch(0.985 0 0);
+  --warning:                  oklch(0.78 0.18 75);
+  --warning-foreground:       oklch(0.145 0 0);
+  --error:                    oklch(0.577 0.245 27.325);
+  --error-foreground:         oklch(0.985 0 0);
+  --info:                     oklch(0.80 0.15 196);
+  --info-foreground:          oklch(0.145 0 0);
+
+  /* Difficulty colours (Easy=green, Medium=amber, Hard=rose) */
+  --difficulty-easy:          oklch(0.65 0.18 145);
+  --difficulty-medium:        oklch(0.78 0.18 75);
+  --difficulty-hard:          oklch(0.65 0.22 15);
+
+  /* Text */
+  --text-primary:             oklch(0.145 0 0);
+  --text-secondary:           oklch(0.35 0 0);
+  --text-muted:               oklch(0.556 0 0);
+
+  /* Charts */
+  --chart-1:                  oklch(0.55 0.22 264);
+  --chart-2:                  oklch(0.80 0.15 196);
+  --chart-3:                  oklch(0.65 0.18 145);
+  --chart-4:                  oklch(0.78 0.18 75);
+  --chart-5:                  oklch(0.65 0.22 15);
+
+  /* Sidebar */
+  --sidebar:                  oklch(0.985 0 0);
+  --sidebar-foreground:       oklch(0.145 0 0);
+  --sidebar-primary:          oklch(0.55 0.22 264);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent:           oklch(0.97 0 0);
   --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar-border:           oklch(0.922 0 0);
+  --sidebar-ring:             oklch(0.55 0.22 264);
+
+  /* Radius scale (PRD Part 21 / Part 7: 12–16px cards, slightly smaller buttons) */
+  --radius-sm-val:            0.375rem;   /* 6px  — inputs/small controls */
+  --radius-md-val:            0.5rem;     /* 8px  — buttons */
+  --radius-lg-val:            0.875rem;   /* 14px — cards */
+  --radius-xl-val:            1.25rem;    /* 20px — modals */
+  --radius-2xl-val:           1.75rem;    /* 28px — large surfaces */
+
+  /* Shadows — minimal per PRD Part 7 */
+  --shadow-sm-val:            0 1px 2px oklch(0 0 0 / 0.05);
+  --shadow-md-val:            0 4px 6px oklch(0 0 0 / 0.07), 0 2px 4px oklch(0 0 0 / 0.05);
+  --shadow-lg-val:            0 10px 15px oklch(0 0 0 / 0.1), 0 4px 6px oklch(0 0 0 / 0.05);
+
+  /* shadcn base radius alias */
+  --radius:                   0.875rem;
 }
 
+/* ============================================================
+   DARK THEME  ( .dark )
+   Dark-first primary experience per PRD Part 7 / Part 25
+   Rich Black background, Dark Glass surfaces, Electric Blue primary
+   ============================================================ */
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
+  /* Rich Black background (not pure #000) — PRD Part 7 */
+  --background:               oklch(0.09 0.005 264);
+  --foreground:               oklch(0.94 0 0);
+
+  /* Dark Glass surface — semi-transparent dark with subtle backdrop blur */
+  --surface:                  oklch(0.14 0.008 264);
+  --surface-glass:            oklch(0.16 0.01 264 / 0.75);
+
+  --card:                     oklch(0.14 0.008 264);
+  --card-foreground:          oklch(0.94 0 0);
+
+  --popover:                  oklch(0.16 0.01 264);
+  --popover-foreground:       oklch(0.94 0 0);
+
+  /* Primary: Electric Blue */
+  --primary:                  oklch(0.62 0.22 264);
+  --primary-foreground:       oklch(0.985 0 0);
+
+  /* Accent: Cyan */
+  --accent:                   oklch(0.78 0.15 196);
+  --accent-foreground:        oklch(0.09 0.005 264);
+
+  --secondary:                oklch(0.20 0.01 264);
+  --secondary-foreground:     oklch(0.94 0 0);
+
+  --muted:                    oklch(0.20 0.01 264);
+  --muted-foreground:         oklch(0.60 0 0);
+
+  --destructive:              oklch(0.65 0.22 15);
+  --destructive-foreground:   oklch(0.985 0 0);
+
+  /* Glass border — thin light-opacity edge for surface definition */
+  --border:                   oklch(1 0 0 / 0.1);
+  --border-glass:             oklch(1 0 0 / 0.08);
+  --input:                    oklch(1 0 0 / 0.12);
+  --ring:                     oklch(0.62 0.22 264);
+
+  /* Semantic colours */
+  --success:                  oklch(0.68 0.18 145);
+  --success-foreground:       oklch(0.09 0.005 264);
+  --warning:                  oklch(0.80 0.18 75);
+  --warning-foreground:       oklch(0.09 0.005 264);
+  --error:                    oklch(0.65 0.22 15);
+  --error-foreground:         oklch(0.985 0 0);
+  --info:                     oklch(0.78 0.15 196);
+  --info-foreground:          oklch(0.09 0.005 264);
+
+  /* Difficulty colours */
+  --difficulty-easy:          oklch(0.68 0.18 145);
+  --difficulty-medium:        oklch(0.80 0.18 75);
+  --difficulty-hard:          oklch(0.65 0.22 15);
+
+  /* Text */
+  --text-primary:             oklch(0.94 0 0);
+  --text-secondary:           oklch(0.75 0 0);
+  --text-muted:               oklch(0.55 0 0);
+
+  /* Charts */
+  --chart-1:                  oklch(0.62 0.22 264);
+  --chart-2:                  oklch(0.78 0.15 196);
+  --chart-3:                  oklch(0.68 0.18 145);
+  --chart-4:                  oklch(0.80 0.18 75);
+  --chart-5:                  oklch(0.65 0.22 15);
+
+  /* Sidebar — flat/solid per PRD Part 25 Decision: Glassmorphism */
+  --sidebar:                  oklch(0.12 0.008 264);
+  --sidebar-foreground:       oklch(0.94 0 0);
+  --sidebar-primary:          oklch(0.62 0.22 264);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --sidebar-accent:           oklch(0.20 0.01 264);
+  --sidebar-accent-foreground: oklch(0.94 0 0);
+  --sidebar-border:           oklch(1 0 0 / 0.08);
+  --sidebar-ring:             oklch(0.62 0.22 264);
+
+  /* Radius — same scale as light mode */
+  --radius-sm-val:            0.375rem;
+  --radius-md-val:            0.5rem;
+  --radius-lg-val:            0.875rem;
+  --radius-xl-val:            1.25rem;
+  --radius-2xl-val:           1.75rem;
+
+  /* Shadows — minimal on dark (border+blur used instead) */
+  --shadow-sm-val:            0 1px 2px oklch(0 0 0 / 0.3);
+  --shadow-md-val:            0 4px 6px oklch(0 0 0 / 0.4), 0 2px 4px oklch(0 0 0 / 0.3);
+  --shadow-lg-val:            0 10px 15px oklch(0 0 0 / 0.5), 0 4px 6px oklch(0 0 0 / 0.3);
+
+  --radius:                   0.875rem;
 }
 
+/* ============================================================
+   Z-INDEX LAYER TOKENS  (PRD Part 21)
+   Single authoritative stacking order
+   ============================================================ */
+:root {
+  --z-base:             0;
+  --z-sticky-header:    10;
+  --z-sidebar-drawer:   20;
+  --z-dropdown:         30;
+  --z-command-palette:  40;
+  --z-modal-backdrop:   50;
+  --z-modal:            51;
+  --z-toast:            60;
+}
+
+/* ============================================================
+   REDUCED MOTION  (PRD Part 8 / Part 10 — hard requirement)
+   Applied as a global CSS-level rule. No per-component opt-in.
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ============================================================
+   BASE LAYER — global element defaults
+   ============================================================ */
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
-  body {
-    @apply bg-background text-foreground;
-  }
+
   html {
     @apply font-sans;
+    font-feature-settings: "rlig" 1, "calt" 1;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Heading defaults — tight line-height per PRD Part 21 typography */
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-heading;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+  }
+
+  /* Body text — relaxed line-height per PRD Part 21 */
+  p, li, dd, dt {
+    line-height: 1.65;
+  }
+
+  /* Code / mono — Geist Mono (PRD Part 7) */
+  code, pre, kbd, samp {
+    @apply font-mono;
+    font-feature-settings: "liga" 0;
+  }
+
+  /* Focus rings — always visible, accent coloured per PRD Part 10 */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+}
+
+/* ============================================================
+   DARK GLASS UTILITY  (PRD Part 7 / Part 25)
+   Applied selectively to Cards and elevated surfaces.
+   Sidebar, Header, base background remain flat.
+   ============================================================ */
+@layer utilities {
+  .glass {
+    background-color: var(--surface-glass);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--border-glass);
+  }
+
+  /* Container utilities (PRD Part 21) */
+  .container-reading {
+    max-width: var(--container-reading);
+    margin-inline: auto;
+    width: 100%;
+  }
+
+  .container-app {
+    max-width: var(--container-app);
+    margin-inline: auto;
+    width: 100%;
+    padding-inline: 1.5rem;
+  }
+
+  .container-wide {
+    max-width: var(--container-wide);
+    margin-inline: auto;
+    width: 100%;
+    padding-inline: 2rem;
+  }
+
+  /* Skeleton shimmer (PRD Part 8 / Part 13) */
+  .skeleton-shimmer {
+    background: linear-gradient(
+      90deg,
+      var(--muted) 25%,
+      oklch(from var(--muted) calc(l + 0.04) c h) 50%,
+      var(--muted) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s ease-in-out infinite;
+  }
+
+  @keyframes shimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
   }
 }

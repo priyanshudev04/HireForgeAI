@@ -1,0 +1,1237 @@
+// ============================================================================
+// HireForge — Prisma Schema
+// Phase 3B | Implements the FROZEN database model (Phase 3A + 3A.5) exactly.
+// No new entities. No redesigned relationships. Implementation only.
+// ============================================================================
+
+// ----------------------------------------------------------------------------
+// DATASOURCE
+// ----------------------------------------------------------------------------
+// Postgres via Supabase. `directUrl` is used for migrations (bypasses the
+// connection pooler, required by Prisma for schema changes), while `url`
+// (pooled, PgBouncer transaction mode) is used at runtime by the app —
+// this split is required specifically because serverless functions
+// (Vercel) open/close connections far more often than a long-lived
+// server, and PgBouncer in transaction mode is what prevents Postgres
+// connection exhaustion under that pattern (Architecture §23 / DDD §23).
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ----------------------------------------------------------------------------
+// GENERATOR
+// ----------------------------------------------------------------------------
+// Standard prisma-client-js generator. No preview features are enabled —
+// none of the frozen design (Sections 1–27 of the DDD) require anything
+// beyond stable Prisma functionality. Enabling preview features
+// speculatively would violate the review's own "no invented scope" rule.
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ============================================================================
+// ENUMS
+// (Final list per Freeze Report Section 3 / 13)
+// ============================================================================
+
+enum Role {
+  STUDENT
+  MODERATOR
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum DifficultyLevel {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum SubmissionStatus {
+  SOLVED
+  ATTEMPTED
+}
+
+enum ProgrammingLanguage {
+  PYTHON
+  JAVA
+  CPP
+  JAVASCRIPT
+  TYPESCRIPT
+  GO
+}
+
+enum QuestionSource {
+  INTERNAL
+  LEETCODE
+  CODEFORCES
+  CODECHEF
+  ATCODER
+  HACKERRANK
+}
+
+enum RoadmapStatus {
+  ACTIVE
+  ARCHIVED
+  REGENERATING
+}
+
+enum InterviewStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  ABANDONED
+}
+
+enum InterviewMode {
+  TEXT
+  VOICE
+}
+
+enum NotificationType {
+  REVISION_DUE
+  ROADMAP_UPDATED
+  HIRESCORE_UPDATED
+  INTERVIEW_REMINDER
+  MENTOR_MESSAGE
+  SYSTEM
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+}
+
+enum AgentType {
+  DSA_MENTOR
+  THEORY_MENTOR
+  RESUME_MENTOR
+  CAREER_MENTOR
+  INTERVIEW_MENTOR
+  PROJECT_MENTOR
+  ANALYTICS_AGENT
+  PLANNER_AGENT
+  RESEARCH_AGENT
+}
+
+// Reserved for future use per Freeze Report Section 3 — not currently
+// consumed by any Group A table, kept because a future unified memory
+// event log was flagged as a plausible future consumer.
+enum MemoryType {
+  LEARNING
+  BEHAVIOR
+  RESUME
+  INTERVIEW
+  FACT
+}
+
+// ============================================================================
+// DOMAIN: IDENTITY
+// ============================================================================
+
+model User {
+  id        String    @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  clerkId   String    @unique
+  email     String    @unique
+  // Nullable: reserved slot for future Enterprise/Campus tenant scoping
+  // (DDD §20/25, Freeze Report Group C) — additive only, no FK enforced
+  // yet since Organization does not exist in V1.
+  organizationId String? @db.Uuid
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  // Soft delete: account closure is a soft delete; Submissions are
+  // anonymized rather than cascaded (DDD §7) to preserve platform
+  // analytics integrity.
+  deletedAt DateTime?
+
+  profile              Profile?
+  roles                UserRole[]
+  submissions          Submission[]
+  problemBookmarks     ProblemBookmark[]
+  theoryTopicBookmarks TheoryTopicBookmark[]
+  projectBookmarks     ProjectBookmark[]
+  quizAttempts         QuizAttempt[]
+  roadmaps             Roadmap[]
+  dailyPlans           DailyPlan[]
+  conversations        Conversation[]
+  learningMemories     LearningMemory[]
+  behaviorMemories     BehaviorMemory[]
+  factMemory           FactMemory?
+  hireScoreSnapshots   HireScoreSnapshot[]
+  dailyStats           DailyStat[]
+  weeklyStats          WeeklyStat[]
+  monthlyStats         MonthlyStat[]
+  resumes              Resume[]
+  projects             Project[]
+  interviewSessions    InterviewSession[]
+  contestResults       ContestResult[]
+  notifications        Notification[]
+  notificationPreference NotificationPreference?
+  auditLogsAsActor     AuditLog[]            @relation("AuditActor")
+
+  friendshipsA         Friendship[]          @relation("FriendshipUserA")
+  friendshipsB         Friendship[]          @relation("FriendshipUserB")
+  studyRoomMemberships StudyRoomMember[]
+  threads              Thread[]
+  threadReplies        ThreadReply[]
+
+  @@index([email])
+  @@map("users")
+}
+
+model Profile {
+  id          String   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  userId      String   @unique @db.Uuid
+  displayName String
+  avatarUrl   String?
+  bio         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("profiles")
+}
+
+model RoleCatalog {
+  // Note: named RoleCatalog to avoid clashing with the `Role` enum used
+  // for lightweight in-code checks; this table is the queryable/joinable
+  // reference-data counterpart described in DDD §20 ("Permission
+  // granularity"). Mapped to table name "roles".
+  id          String   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  name        Role     @unique
+  description String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userRoles       UserRole[]
+  rolePermissions RolePermission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  key         String   @unique // e.g. "community:moderate", "admin:content:edit"
+  description String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  rolePermissions RolePermission[]
+
+  @@map("permissions")
+}
+
+// New in Freeze Report Section 1/13 — formalizes the previously-implied
+// Role <-> Permission relationship.
+model RolePermission {
+  roleId       String @db.Uuid
+  permissionId String @db.Uuid
+
+  assignedAt DateTime @default(now())
+
+  role       RoleCatalog @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission  @relation(fields: [permissionId], references: [id], onDelete: Restrict)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model UserRole {
+  userId String @db.Uuid
+  roleId String @db.Uuid
+
+  assignedAt DateTime @default(now())
+
+  user User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role RoleCatalog  @relation(fields: [roleId], references: [id], onDelete: Restrict)
+
+  @@id([userId, roleId])
+  @@map("user_roles")
+}
+
+// ============================================================================
+// DOMAIN: LEARNING — DSA
+// ============================================================================
+
+model Topic {
+  id   String @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  name String @unique
+  slug String @unique
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  problems         Problem[]
+  knowledgeNodes   KnowledgeNode[]
+
+  @@map("topics")
+}
+
+model Pattern {
+  id   String @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  name String @unique
+  slug String @unique
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  problems ProblemPattern[]
+
+  @@map("patterns")
+}
+
+model Problem {
+  id                   String              @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  title                String
+  slug                 String              @unique
+  descriptionMarkdown  String
+  difficultyLevel      DifficultyLevel
+  source               QuestionSource      @default(INTERNAL)
+  topicId              String              @db.Uuid
+  // JSONB: shape is genuinely variable per problem (DDD §13 / Freeze §6 confirmed).
+  constraintsJson       Json?
+  videoExplanationUrl   String?
+  // Denormalized read-helper columns, refreshed asynchronously by a job,
+  // never synchronously on write (DDD §23 write-optimization rule).
+  acceptanceRateCache   Float?              @default(0)
+  companyTagsCache      Json?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  createdBy String?   @db.Uuid
+  updatedBy String?   @db.Uuid
+  // Soft delete only — restrict on FK, never hard-deleted while
+  // Submissions reference it (DDD §5).
+  deletedAt DateTime?
+
+  topic       Topic              @relation(fields: [topicId], references: [id], onDelete: Restrict)
+  patterns    ProblemPattern[]
+  companies   CompanyQuestion[]
+  submissions Submission[]
+  bookmarks   ProblemBookmark[]
+  revisionSchedules ProblemRevisionSchedule[]
+
+  @@index([topicId, difficultyLevel])
+  @@map("problems")
+}
+
+// Genuine N:N (Freeze Report Section 4 confirmed necessary).
+model ProblemPattern {
+  problemId String @db.Uuid
+  patternId String @db.Uuid
+
+  problem Problem @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  pattern Pattern @relation(fields: [patternId], references: [id], onDelete: Cascade)
+
+  @@id([problemId, patternId])
+  @@map("problem_patterns")
+}
+
+// Append-only fact log — never updated, never deleted (DDD §7 / Freeze §1 confirmed).
+model Submission {
+  id                String            @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  userId            String            @db.Uuid
+  problemId         String            @db.Uuid
+  code              String
+  language          ProgrammingLanguage
+  status            SubmissionStatus
+  timeTakenSeconds  Int?
+  hintsUsedCount    Int               @default(0)
+  idempotencyKey    String
+
+  createdAt DateTime @default(now())
+  // No updatedAt/deletedAt — this table is intentionally immutable
+  // and permanent (DDD §7, §9).
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  problem Problem @relation(fields: [problemId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, problemId, idempotencyKey])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([problemId, status])
+  @@map("submissions")
+}
+
+// Split from the rejected polymorphic Bookmark entity (Freeze Report §1).
+model ProblemBookmark {
+  userId    String @db.Uuid
+  problemId String @db.Uuid
+
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  problem Problem @relation(fields: [problemId], references: [id], onDelete: Cascade)
+
+  @@id([userId, problemId])
+  @@map("problem_bookmarks")
+}
+
+// Split from the rejected polymorphic RevisionSchedule entity (Freeze Report §1).
+model ProblemRevisionSchedule {
+  id             String    @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  userId         String    @db.Uuid
+  problemId      String    @db.Uuid
+  intervalStage  Int       @default(1) // 1=1day,2=3day,3=7day,4=15day,5=30day,6=60day
+  dueAt          DateTime
+  lastReviewedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  problem Problem @relation(fields: [problemId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, problemId])
+  @@index([userId, dueAt])
+  @@map("problem_revision_schedules")
+}
+
+// ============================================================================
+// DOMAIN: LEARNING — THEORY
+// ============================================================================
+
+model Subject {
+  id   String @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  name String @unique
+  slug String @unique
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  topics TheoryTopic[]
+
+  @@map("subjects")
+}
+
+// Note entity merged into TheoryTopic per Freeze Report Section 1 —
+// no TheoryTopic exists without exactly one body of content, so the
+// separate 1:1 Note table added a join with no benefit.
+model TheoryTopic {
+  id               String   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  subjectId        String   @db.Uuid
+  name             String
+  slug             String   @unique
+  contentMarkdown  String   // merged from the former `Note` entity
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  createdBy String?   @db.Uuid
+  updatedBy String?   @db.Uuid
+  deletedAt DateTime?
+
+  subject        Subject                 @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  flashcards     Flashcard[]
+  quizzes        Quiz[]
+  bookmarks      TheoryTopicBookmark[]
+  knowledgeNodes KnowledgeNode[]
+
+  @@index([subjectId])
+  @@map("theory_topics")
+}
+
+model TheoryTopicBookmark {
+  userId        String @db.Uuid
+  theoryTopicId String @db.Uuid
+
+  createdAt DateTime @default(now())
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  theoryTopic TheoryTopic @relation(fields: [theoryTopicId], references: [id], onDelete: Cascade)
+
+  @@id([userId, theoryTopicId])
+  @@map("theory_topic_bookmarks")
+}
+
+model Flashcard {
+  id            String   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  theoryTopicId String   @db.Uuid
+  question      String
+  answer        String
+  aiGenerated   Boolean  @default(false)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  theoryTopic       TheoryTopic                @relation(fields: [theoryTopicId], references: [id], onDelete: Cascade)
+  revisionSchedules FlashcardRevisionSchedule[]
+
+  @@index([theoryTopicId])
+  @@map("flashcards")
+}
+
+model FlashcardRevisionSchedule {
+  id             String    @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  userId         String    @db.Uuid
+  flashcardId    String    @db.Uuid
+  intervalStage  Int       @default(1)
+  dueAt          DateTime
+  lastReviewedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  flashcard Flashcard @relation(fields: [flashcardId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, flashcardId])
+  @@index([userId, dueAt])
+  @@map("flashcard_revision_schedules")
+}
+
+model Quiz {
+  id            String @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  theoryTopicId String @db.Uuid
+  title         String
+  questionsJson Json   // MCQ set — variable shape, AI- or admin-authored
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  theoryTopic TheoryTopic    @relation(fields: [theoryTopicId], references: [id], onDelete: Cascade)
+  attempts    QuizAttempt[]
+
+  @@index([theoryTopicId])
+  @@map("quizzes")
+}
+
+model QuizAttempt {
+  id          String @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  userId      String @db.Uuid
+  quizId      String @db.Uuid
+  answersJson Json   // variable question-count shape (DDD §13 / Freeze §6 confirmed)
+  score       Float
+
+  createdAt DateTime @default(now())
+  // Immutable — a quiz attempt is a historical fact, never edited.
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  quiz Quiz @relation(fields: [quizId], references: [id], onDelete: Restrict)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("quiz_attempts")
+}
+
+// ============================================================================
+// DOMAIN: KNOWLEDGE GRAPH
+// ============================================================================
+
+model KnowledgeNode {
+  id            String   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  name          String
+  subjectArea   String   // e.g. "DSA", "OS", "DBMS" — free text tag, not FK-bound, since Knowledge Graph spans both Topic and TheoryTopic taxonomies
+  description   String?
+  topicId       String?  @db.Uuid
+  theoryTopicId String?  @db.Uuid
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  topic        Topic?       @relation(fields: [topicId], references: [id], onDelete: SetNull)
+  theoryTopic  TheoryTopic? @relation(fields: [theoryTopicId], references: [id], onDelete: SetNull)
+
+  outgoingEdges KnowledgeEdge[] @relation("FromNode")
+  incomingEdges KnowledgeEdge[] @relation("ToNode")
+  roadmapNodes  RoadmapNode[]
+
+  @@index([subjectArea])
+  @@map("knowledge_nodes")
+}
+
+model KnowledgeEdge {
+  fromNodeId String @db.Uuid
+  toNodeId   String @db.Uuid
+  weight     Float? @default(1.0)
+
+  createdAt DateTime @default(now())
+
+  fromNode KnowledgeNode @relation("FromNode", fields: [fromNodeId], references: [id], onDelete: Restrict)
+  toNode   KnowledgeNode @relation("ToNode", fields: [toNodeId], references: [id], onDelete: Restrict)
+
+  @@id([fromNodeId, toNodeId])
+  // Explicit secondary index for backward traversal (Root Cause Analysis,
+  // Architecture §23 / DDD §10) — the composite PK alone only optimizes
+  // forward traversal from fromNodeId.
+  @@index([toNodeId])
+  @@map("knowledge_edges")
+}
+
+// ============================================================================
+// DOMAIN: ROADMAPS
+// ============================================================================
+
+model Roadmap {
+  id             String        @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  userId         String        @db.Uuid
+  targetRole     String?
+  targetCompanies Json?        // array of company slugs at generation time
+  status         RoadmapStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user  User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  nodes RoadmapNode[]
+
+  @@index([userId, status])
+  @@map("roadmaps")
+}
+
+model RoadmapNode {
+  id              String    @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  roadmapId       String    @db.Uuid
+  knowledgeNodeId String    @db.Uuid
+  orderIndex      Int
+  isComplete      Boolean   @default(false)
+  isSkipped       Boolean   @default(false)
+  completedAt     DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  roadmap       Roadmap       @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
+  knowledgeNode KnowledgeNode @relation(fields: [knowledgeNodeId], references: [id], onDelete: Restrict)
+
+  @@index([roadmapId, orderIndex])
+  @@map("roadmap_nodes")
+}
+
+model DailyPlan {
+  id           String   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  userId       String   @db.Uuid
+  planDate     DateTime @db.Date
+  tasksJson    Json     // generated task list — variable shape per day
+  completedAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, planDate])
+  @@index([userId, planDate(sort: Desc)])
+  @@map("daily_plans")
+}
+
+// ============================================================================
+// DOMAIN: AI & MEMORY
+// ============================================================================
+
+model Conversation {
+  id            String    @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  userId        String    @db.Uuid
+  title         String?
+  lastMessageAt DateTime?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  user     User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages Message[]
+  summary  ConversationSummary?
+
+  @@index([userId, lastMessageAt(sort: Desc)])
+  @@map("conversations")
+}
+
+model Message {
+  id             String       @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  conversationId String       @db.Uuid
+  role           MessageRole
+  content        String
+  agentUsed      AgentType?
+  tokensUsed     Int?         @default(0)
+
+  createdAt DateTime @default(now())
+  // Permanent, never edited — Architecture §8 / DDD §16.
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@map("messages")
+}
+
+// Current-state pattern: overwritten in place, not historized
+// (DDD §16 / Freeze §8 confirmed critical distinction).
+model ConversationSummary {
+  conversationId    String   @id @db.Uuid
+  summaryText       String
+  tokenUsageTotal   Int      @default(0) // Freeze Report §8 recommended addition
+
+  updatedAt DateTime @updatedAt
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@map("conversation_summaries")
+}
+
+// Historized: one row per nightly regeneration (DDD §16 confirmed).
+model LearningMemory {
+  id             String   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  userId         String   @db.Uuid
+  weakTopicsJson Json     // array of topic/knowledge-node IDs — read-mostly, not filtered at DB level (Freeze §6 confirmed acceptable JSONB use)
+  strongTopicsJson Json
+  masteryScoresJson Json
+
+  computedAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, computedAt(sort: Desc)])
+  @@map("learning_memories")
+}
+
+model BehaviorMemory {
+  id                 String @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  userId             String @db.Uuid
+  activeHoursJson    Json
+  studyHabitsJson    Json
+  currentStreakDays  Int    @default(0)
+
+  computedAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, computedAt(sort: Desc)])
+  @@map("behavior_memories")
+}
+
+// Current-state pattern: one row per user, overwritten/updated in place
+// (DDD §16 / Freeze §1 confirmed — distinct from the four historized
+// memory tables above).
+model FactMemory {
+  userId    String @id @db.Uuid
+  factsJson Json   // explicit, user-stated facts e.g. { preferredLanguage: "python", targetRole: "SDE" }
+
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("fact_memories")
+}
+
+// ============================================================================
+// DOMAIN: ANALYTICS
+// ============================================================================
+
+model HireScoreSnapshot {
+  id                  String   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  userId              String   @db.Uuid
+  overallScore        Float
+  dsaScore            Float
+  theoryScore         Float
+  projectsScore       Float
+  resumeScore         Float
+  communicationScore  Float
+  interviewScore      Float
+  consistencyScore    Float
+
+  computedAt DateTime @default(now())
+  // Append-only — deliberate denormalization confirmed correct (DDD §6).
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, computedAt(sort: Desc)])
+  @@map("hirescore_snapshots")
+}
+
+model DailyStat {
+  id               String   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  userId           String   @db.Uuid
+  statDate         DateTime @db.Date
+  problemsSolved   Int      @default(0)
+  minutesStudied   Int      @default(0)
+  quizzesTaken     Int      @default(0)
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, statDate])
+  @@map("daily_stats")
+}
+
+model WeeklyStat {
+  id             String   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  userId         String   @db.Uuid
+  isoWeek        String   // e.g. "2026-W28"
+  problemsSolved Int      @default(0)
+  minutesStudied Int      @default(0)
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, isoWeek])
+  @@map("weekly_stats")
+}
+
+model MonthlyStat {
+  id             String   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  userId         String   @db.Uuid
+  yearMonth      String   // e.g. "2026-07"
+  problemsSolved Int      @default(0)
+  minutesStudied Int      @default(0)
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, yearMonth])
+  @@map("monthly_stats")
+}
+
+// ============================================================================
+// DOMAIN: RESUME
+// ============================================================================
+
+model Resume {
+  id    String @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  userId String @db.Uuid
+  title  String
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  user     User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  versions ResumeVersion[]
+
+  @@map("resumes")
+}
+
+// Immutable per version — no updatedAt (DDD §7 confirmed).
+model ResumeVersion {
+  id             String @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  resumeId       String @db.Uuid
+  versionNumber  Int
+  storagePath    String // object path only, never a raw public URL (DDD §15)
+  atsScoreCache  Float?
+
+  createdAt DateTime @default(now())
+
+  resume     Resume       @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+  jdAnalyses JDAnalysis[]
+
+  @@unique([resumeId, versionNumber])
+  @@map("resume_versions")
+}
+
+model JDAnalysis {
+  id                  String @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  resumeVersionId     String @db.Uuid
+  jobDescriptionText  String
+  atsScore            Float
+  missingSkillsJson   Json
+  keywordGapJson      Json
+  suggestionsJson     Json
+
+  createdAt DateTime @default(now())
+
+  resumeVersion ResumeVersion @relation(fields: [resumeVersionId], references: [id], onDelete: Cascade)
+
+  @@index([resumeVersionId, createdAt(sort: Desc)])
+  @@map("jd_analyses")
+}
+
+// ============================================================================
+// DOMAIN: PROJECTS
+// ============================================================================
+
+model Project {
+  id          String  @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  userId      String  @db.Uuid
+  title       String
+  description String?
+  skillsJson  Json?
+  aiGenerated Boolean @default(false)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  user       User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  milestones ProjectMilestone[]
+  bookmarks  ProjectBookmark[]
+
+  @@index([userId])
+  @@map("projects")
+}
+
+model ProjectMilestone {
+  id          String    @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  projectId   String    @db.Uuid
+  title       String
+  isComplete  Boolean   @default(false)
+  completedAt DateTime?
+  orderIndex  Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, orderIndex])
+  @@map("project_milestones")
+}
+
+// Group B (Freeze Report §12) — modeled now, populated later.
+model ProjectTemplate {
+  id          String @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  title       String
+  description String
+  skillsJson  Json
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@map("project_templates")
+}
+
+model ProjectBookmark {
+  userId    String @db.Uuid
+  projectId String @db.Uuid
+
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@id([userId, projectId])
+  @@map("project_bookmarks")
+}
+
+// ============================================================================
+// DOMAIN: INTERVIEW
+// ============================================================================
+
+model InterviewSession {
+  id       String          @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  userId   String          @db.Uuid
+  mode     InterviewMode   @default(TEXT)
+  status   InterviewStatus @default(SCHEDULED)
+  companySlug String?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  completedAt DateTime?
+
+  user      User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  questions InterviewQuestion[]
+  feedback  InterviewFeedback?
+  voiceRecordings VoiceRecordingRef[]
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("interview_sessions")
+}
+
+model InterviewQuestion {
+  id                 String  @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  interviewSessionId String  @db.Uuid
+  questionText       String
+  answerText         String?
+  orderIndex         Int
+
+  createdAt DateTime @default(now())
+
+  session InterviewSession @relation(fields: [interviewSessionId], references: [id], onDelete: Cascade)
+
+  @@index([interviewSessionId, orderIndex])
+  @@map("interview_questions")
+}
+
+model InterviewFeedback {
+  interviewSessionId    String @id @db.Uuid
+  overallScore          Float
+  confidenceScore       Float?
+  clarityScore          Float?
+  technicalAccuracyScore Float?
+  // JSONB: AI-generated structured-but-flexible rubric (DDD §13 confirmed).
+  detailedBreakdownJson Json
+
+  createdAt DateTime @default(now())
+
+  session InterviewSession @relation(fields: [interviewSessionId], references: [id], onDelete: Cascade)
+
+  @@map("interview_feedback")
+}
+
+model VoiceRecordingRef {
+  id                 String @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  interviewSessionId String @db.Uuid
+  storagePath        String // object path only (DDD §15)
+  durationSeconds    Int?
+
+  createdAt DateTime @default(now())
+  // Subject to a 90-day retention job (DDD §15) that deletes both the
+  // Storage object and this row together — not modeled as soft delete,
+  // since retention expiry is a real hard delete by design.
+
+  session InterviewSession @relation(fields: [interviewSessionId], references: [id], onDelete: Cascade)
+
+  @@index([interviewSessionId])
+  @@map("voice_recording_refs")
+}
+
+// ============================================================================
+// DOMAIN: COMPANY
+// ============================================================================
+
+model Company {
+  id         String  @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  name       String  @unique
+  slug       String  @unique
+  logoUrl    String?
+  salaryRangeJson Json?
+  requiredSkillsJson Json?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  questions             CompanyQuestion[]
+  interviewExperiences  InterviewExperience[]
+  readinessScores       CompanyReadinessScore[]
+
+  @@map("companies")
+}
+
+model CompanyQuestion {
+  companyId String @db.Uuid
+  problemId String @db.Uuid
+
+  createdAt DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  problem Problem @relation(fields: [problemId], references: [id], onDelete: Cascade)
+
+  @@id([companyId, problemId])
+  @@map("company_questions")
+}
+
+// Group B (Freeze Report §12).
+model InterviewExperience {
+  id        String @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  companyId String @db.Uuid
+  contentText String
+  isApproved  Boolean @default(false)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@map("interview_experiences")
+}
+
+// Group B (Freeze Report §12).
+model CompanyReadinessScore {
+  userId    String @db.Uuid
+  companyId String @db.Uuid
+  score     Float
+
+  computedAt DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@id([userId, companyId])
+  @@map("company_readiness_scores")
+}
+
+// ============================================================================
+// DOMAIN: CONTEST (Group B)
+// ============================================================================
+
+model Contest {
+  id           String   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  platform     QuestionSource
+  name         String
+  startsAt     DateTime
+  externalUrl  String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  results ContestResult[]
+
+  @@index([platform, startsAt])
+  @@map("contests")
+}
+
+model ContestResult {
+  userId     String @db.Uuid
+  contestId  String @db.Uuid
+  rank       Int?
+  ratingDelta Int?
+
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contest Contest @relation(fields: [contestId], references: [id], onDelete: Cascade)
+
+  @@id([userId, contestId])
+  @@map("contest_results")
+}
+
+// ============================================================================
+// DOMAIN: COMMUNITY (Group B)
+// ============================================================================
+
+model Friendship {
+  userAId String @db.Uuid
+  userBId String @db.Uuid
+  status  String @default("pending") // pending | accepted | blocked
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userA User @relation("FriendshipUserA", fields: [userAId], references: [id], onDelete: Cascade)
+  userB User @relation("FriendshipUserB", fields: [userBId], references: [id], onDelete: Cascade)
+
+  // Canonicalized ordering (userAId < userBId) enforced at the
+  // application layer per DDD §10, preventing duplicate/reverse rows.
+  @@id([userAId, userBId])
+  @@map("friendships")
+}
+
+model StudyRoom {
+  id        String   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  name      String
+  isActive  Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  endedAt   DateTime?
+
+  members StudyRoomMember[]
+
+  @@map("study_rooms")
+}
+
+model StudyRoomMember {
+  studyRoomId String @db.Uuid
+  userId      String @db.Uuid
+  joinedAt    DateTime @default(now())
+
+  studyRoom StudyRoom @relation(fields: [studyRoomId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([studyRoomId, userId])
+  @@map("study_room_members")
+}
+
+model Thread {
+  id     String @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  userId String @db.Uuid
+  title  String
+  bodyMarkdown String
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  user    User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  replies ThreadReply[]
+
+  @@index([userId])
+  @@map("threads")
+}
+
+model ThreadReply {
+  id       String @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  threadId String @db.Uuid
+  userId   String @db.Uuid
+  bodyMarkdown String
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  thread Thread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([threadId, createdAt])
+  @@map("thread_replies")
+}
+
+// ============================================================================
+// DOMAIN: NOTIFICATIONS
+// ============================================================================
+
+model Notification {
+  id      String            @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  userId  String            @db.Uuid
+  type    NotificationType
+  title   String
+  body    String
+  readAt  DateTime?
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt(sort: Desc)])
+  @@index([type, userId])
+  @@map("notifications")
+}
+
+model NotificationPreference {
+  userId              String  @id @db.Uuid
+  emailEnabled        Boolean @default(true)
+  pushEnabled         Boolean @default(true)
+  revisionRemindersOn Boolean @default(true)
+
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notification_preferences")
+}
+
+// ============================================================================
+// DOMAIN: ADMINISTRATION
+// ============================================================================
+
+// Immutable, append-only, never deleted (DDD §9 / Freeze §1 confirmed).
+model AuditLog {
+  id         String   @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  actorId    String   @db.Uuid
+  action     String   // e.g. "problem.update", "user.role.change"
+  targetType String
+  targetId   String   @db.Uuid
+  changesJson Json?
+
+  createdAt DateTime @default(now())
+
+  actor User @relation("AuditActor", fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([targetType, targetId])
+  @@index([actorId, createdAt(sort: Desc)])
+  @@map("audit_logs")
+}
+
+model FeatureFlag {
+  id      String  @id @default(dbgenerated("uuid_generate_v7()")) @db.Uuid
+  key     String  @unique
+  isEnabled Boolean @default(false)
+  description String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("feature_flags")
+}

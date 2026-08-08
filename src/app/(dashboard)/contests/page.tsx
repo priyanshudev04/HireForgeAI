@@ -1,0 +1,1 @@
+import { ModuleOverview } from "@/components/shared/module-overview"; export default function Page(){return <ModuleOverview title="Contest Tracker" description="Never miss a contest and review how your performance improves." action="View calendar" items={["Upcoming contests","Your history","Platform schedule","Performance trend"]}/>}

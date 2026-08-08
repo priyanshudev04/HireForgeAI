@@ -1,0 +1,1 @@
+import { ModuleOverview } from "@/components/shared/module-overview"; export default function Page(){return <ModuleOverview title="Revision Queue" description="Strengthen recall with a daily, spaced-repetition queue." action="Start revision" items={["Due today","DSA patterns","Theory flashcards","Completed reviews"]}/>}
