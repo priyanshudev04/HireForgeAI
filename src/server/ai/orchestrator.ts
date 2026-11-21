@@ -1,7 +1,9 @@
+import "server-only"
+
 import type { MentorTurn } from "@/lib/contracts/mentor"
 
 import { MENTOR_SYSTEM_PROMPT } from "./agents/mentor"
-import { llm } from "./providers"
+import { llm } from "./llm"
 
 export interface MentorReplyInput {
   message: string
