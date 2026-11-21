@@ -3,7 +3,7 @@ import "server-only"
 import type { z } from "zod"
 
 import { AiNotConfiguredError } from "./errors"
-import { anthropicProvider } from "./providers/anthropic"
+import { geminiProvider } from "./providers/gemini"
 
 export { AiGenerationError, AiNotConfiguredError } from "./errors"
 
@@ -15,6 +15,8 @@ export interface StructuredRequest<Schema extends z.ZodType> {
   system: string
   prompt: string
   schema: Schema
+  /** Example of the JSON shape to return, for providers without native structured outputs. */
+  jsonShape: string
   maxTokens?: number
 }
 
@@ -23,7 +25,7 @@ export interface LlmProvider {
   generateStructured<Schema extends z.ZodType>(request: StructuredRequest<Schema>): Promise<z.infer<Schema>>
 }
 
-const provider: LlmProvider = anthropicProvider
+const provider: LlmProvider = geminiProvider
 
 export const llm = {
   async generateStructured<Schema extends z.ZodType>(request: StructuredRequest<Schema>): Promise<z.infer<Schema>> {

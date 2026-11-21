@@ -41,3 +41,11 @@ export function formatDue(dueAt: number, now = Date.now()) {
   const days = Math.round(diff / DAY)
   return days === 1 ? "Due tomorrow" : `Due in ${days} days`
 }
+
+/** Short label for the gap a rating would schedule, e.g. "10m", "3d". */
+export function intervalLabel(stage: number) {
+  const ms = STAGE_INTERVALS_MS[clampStage(stage)]
+  if (ms < 60 * MINUTE) return `${Math.round(ms / MINUTE)}m`
+  if (ms < DAY) return `${Math.round(ms / (60 * MINUTE))}h`
+  return `${Math.round(ms / DAY)}d`
+}

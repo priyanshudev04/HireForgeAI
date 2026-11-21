@@ -198,6 +198,7 @@ function FlashcardReview({ cards }: { cards: FlashcardRevisionItem[] }) {
           flipped={flippedId === item.id}
           onFlip={() => setFlippedId(item.id)}
           onRate={rate}
+          stage={item.stage}
         />
         {reviewed > 0 && (
           <p className="flex items-center gap-1 text-xs text-success">

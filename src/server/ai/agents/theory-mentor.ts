@@ -27,9 +27,9 @@ const generatedQuizSchema = z.object({
     z.object({
       question: z.string().describe("The question stem."),
       options: z.array(z.string()).describe(`Exactly ${QUIZ_OPTION_COUNT} answer options.`),
-      correctIndex: z.number().int().describe("Zero-based index of the single correct option."),
+      correctIndex: z.coerce.number().int().describe("Zero-based index of the single correct option."),
       explanation: z.string().describe("One or two sentences on why the correct option is right and the most tempting wrong option is wrong."),
-      concept: z.string().describe("Short name (2 to 5 words) of the concept this question tests, e.g. 'Context switching'."),
+      concept: z.string().default("General").describe("Short name (2 to 5 words) of the concept this question tests, e.g. 'Context switching'."),
     }),
   ),
 })
@@ -39,10 +39,14 @@ const generatedFlashcardsSchema = z.object({
     z.object({
       front: z.string().describe("A question or prompt that requires recall."),
       back: z.string().describe("A concise answer, at most three sentences."),
-      concept: z.string().describe("Short name (2 to 5 words) of the concept this card covers."),
+      concept: z.string().default("General").describe("Short name (2 to 5 words) of the concept this card covers."),
     }),
   ),
 })
+
+const QUIZ_JSON_SHAPE = `{"questions": [{"question": "string", "options": ["string", "string", "string", "string"], "correctIndex": 0, "explanation": "string, why the answer is right", "concept": "string, 2 to 5 words"}]}`
+
+const FLASHCARDS_JSON_SHAPE = `{"flashcards": [{"front": "string, the prompt", "back": "string, concise answer", "concept": "string, 2 to 5 words"}]}`
 
 function focusBlock(focusConcepts: string[]) {
   const cleaned = focusConcepts
@@ -68,9 +72,9 @@ export async function generateQuiz(
 ): Promise<QuizQuestion[]> {
   const prompt = `<topic_notes>\n${topicToPlainText(topic)}\n</topic_notes>${focusBlock(focusConcepts)}
 
-Write ${count} multiple-choice questions on "${topic.title}". Each question has exactly ${QUIZ_OPTION_COUNT} options and exactly one correct answer. Wrong options should be plausible misconceptions, not jokes. Vary difficulty from basic recall to applied reasoning, and cover different concepts rather than repeating one.`
+Write ${count} multiple-choice questions on "${topic.title}". Each question has exactly ${QUIZ_OPTION_COUNT} options and exactly one correct answer; correctIndex is its zero-based position in options. Wrong options should be plausible misconceptions, not jokes. Vary difficulty from basic recall to applied reasoning, and cover different concepts rather than repeating one.`
 
-  const result = await llm.generateStructured({ system: SYSTEM_PROMPT, prompt, schema: generatedQuizSchema })
+  const result = await llm.generateStructured({ system: SYSTEM_PROMPT, prompt, schema: generatedQuizSchema, jsonShape: QUIZ_JSON_SHAPE })
 
   const questions = result.questions
     .filter(
@@ -106,7 +110,7 @@ export async function generateFlashcards(
 
 Write ${count} flashcards on "${topic.title}" for spaced-repetition review. Each card tests one idea. Prefer "why" and "how" prompts and comparisons over pure definitions, and cover the topic broadly.`
 
-  const result = await llm.generateStructured({ system: SYSTEM_PROMPT, prompt, schema: generatedFlashcardsSchema })
+  const result = await llm.generateStructured({ system: SYSTEM_PROMPT, prompt, schema: generatedFlashcardsSchema, jsonShape: FLASHCARDS_JSON_SHAPE })
 
   const flashcards = result.flashcards
     .filter((card) => card.front.trim() && card.back.trim())

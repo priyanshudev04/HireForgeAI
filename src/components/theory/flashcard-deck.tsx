@@ -8,10 +8,12 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Spinner } from "@/components/ui/spinner"
 import { ErrorState } from "@/components/shared/error-state"
-import { formatDue, type RecallRating } from "@/lib/revision/schedule"
+import { formatDue, intervalLabel, nextStageForRating, type RecallRating } from "@/lib/revision/schedule"
 import { getRevisionSnapshot, getTopicItem, rateFlashcard, saveDeck, useRevisionState, type TopicRef } from "@/lib/revision/store"
 import { ApiRequestError, generateFlashcards } from "@/lib/theory/api"
 import type { Flashcard } from "@/lib/theory/types"
+import { cn } from "@/lib/utils"
+import { Progress } from "@/components/ui/progress"
 
 export const RATINGS: Array<{ rating: RecallRating; label: string; hint: string }> = [
   { rating: "again", label: "Again", hint: "Forgot it" },
@@ -59,7 +61,7 @@ export function FlashcardDeck({ topic }: { topic: TopicRef }) {
         <CardContent className="flex min-h-105 flex-col items-center justify-center gap-3 p-8 text-center">
           <Spinner />
           <p className="text-sm font-medium text-foreground">Generating flashcards for {topic.topicTitle}…</p>
-          <p className="text-xs text-muted-foreground">This usually takes 10 to 30 seconds.</p>
+          <p className="text-xs text-muted-foreground">Free AI models can take 10 to 40 seconds.</p>
         </CardContent>
       </Card>
     )
@@ -94,6 +96,7 @@ export function FlashcardDeck({ topic }: { topic: TopicRef }) {
 
   return (
     <div className="space-y-4">
+      <Progress value={Math.min(index, cards.length)} max={cards.length} aria-label="Deck progress" />
       <Card glass className="min-h-105">
         <CardContent className="grid min-h-105 place-items-center p-4 sm:p-8">
           {done ? (
@@ -120,6 +123,7 @@ export function FlashcardDeck({ topic }: { topic: TopicRef }) {
                 flipped={flipped}
                 onFlip={() => setFlipped(true)}
                 onRate={rate}
+                stage={revision.items[`card:${topic.topicSlug}:${card.id}`]?.stage}
                 scheduleNote={scheduleNote(revision.items[`card:${topic.topicSlug}:${card.id}`]?.dueAt)}
                 footer={
                   <Button variant="ghost" size="icon-sm" aria-label="Previous card" disabled={index === 0} onClick={() => { setFlipped(false); setIndex((i) => i - 1) }}>
@@ -153,6 +157,7 @@ export function FlashcardFace({
   flipped,
   onFlip,
   onRate,
+  stage,
   scheduleNote,
   footer,
 }: {
@@ -161,42 +166,85 @@ export function FlashcardFace({
   flipped: boolean
   onFlip: () => void
   onRate: (rating: RecallRating) => void
+  /** Current SRS stage, or undefined for a card that hasn't been reviewed yet. */
+  stage?: number
   scheduleNote?: string
   footer?: React.ReactNode
 }) {
+  // Keyboard: Space/Enter flips, 1-4 rates once the answer is showing.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.metaKey || event.ctrlKey || event.altKey) return
+      const target = event.target as HTMLElement | null
+      if (target && ["INPUT", "TEXTAREA", "BUTTON", "A"].includes(target.tagName) && event.key !== " " && !/^[1-4]$/.test(event.key)) return
+      if (!flipped && (event.key === " " || event.key === "Enter")) {
+        event.preventDefault()
+        onFlip()
+      } else if (flipped && /^[1-4]$/.test(event.key)) {
+        onRate(RATINGS[Number(event.key) - 1].rating)
+      }
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  })
+
+  const faceClass =
+    "absolute inset-0 flex flex-col items-center justify-center gap-4 overflow-y-auto rounded-3xl border border-border bg-background p-6 text-center shadow-sm [backface-visibility:hidden] sm:p-8"
+
   return (
-    <div className="w-full max-w-xl rounded-3xl border border-border bg-background p-6 text-center shadow-sm sm:p-8">
-      <div className="mb-6 flex items-center justify-center gap-2">
-        <Sparkles className="size-5 text-primary" />
+    <div className="w-full max-w-xl space-y-5">
+      <div className="flex items-center justify-center gap-2">
+        <Sparkles className="size-4 text-primary" />
         <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{label}</span>
       </div>
 
-      <div className="space-y-6">
-        <p className="text-xs font-medium text-primary">{card.concept}</p>
-        <h2 className="font-heading text-xl font-bold leading-tight text-foreground sm:text-2xl">{card.front}</h2>
-
-        {flipped ? (
-          <>
-            <p className="text-sm leading-7 text-muted-foreground">{card.back}</p>
-            <div>
-              <p className="mb-2 text-xs text-muted-foreground">How well did you recall it?</p>
-              <div className="flex flex-wrap justify-center gap-2">
-                {RATINGS.map(({ rating, label: ratingLabel, hint }) => (
-                  <Button key={rating} variant="outline" onClick={() => onRate(rating)} title={hint}>
-                    {ratingLabel}
-                  </Button>
-                ))}
-              </div>
-            </div>
-          </>
-        ) : (
-          <Button onClick={onFlip}>Show answer</Button>
-        )}
-
-        <div className="flex items-center justify-center gap-3">
-          {footer}
-          {scheduleNote && <span className="text-xs text-muted-foreground">{scheduleNote}</span>}
+      <button
+        type="button"
+        onClick={() => !flipped && onFlip()}
+        aria-label={flipped ? "Answer shown" : "Show answer"}
+        className="block h-72 w-full cursor-pointer rounded-3xl [perspective:1200px] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 sm:h-80"
+      >
+        <div
+          className={cn(
+            "relative h-full w-full transition-transform duration-500 [transform-style:preserve-3d] motion-reduce:transition-none",
+            flipped && "[transform:rotateY(180deg)]",
+          )}
+        >
+          <div className={faceClass} aria-hidden={flipped}>
+            <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Question</span>
+            <h2 className="font-heading text-xl font-bold leading-snug text-foreground sm:text-2xl">{card.front}</h2>
+            <span className="text-xs text-muted-foreground">Tap or press Space to reveal</span>
+          </div>
+          <div className={cn(faceClass, "[transform:rotateY(180deg)]")} aria-hidden={!flipped}>
+            <span className="text-xs font-medium text-primary">{card.concept}</span>
+            <p className="text-base leading-7 text-foreground">{card.back}</p>
+          </div>
         </div>
+      </button>
+
+      {flipped ? (
+        <div>
+          <p className="mb-2 text-center text-xs text-muted-foreground">How well did you recall it?</p>
+          <div className="grid grid-cols-4 gap-2">
+            {RATINGS.map(({ rating, label: ratingLabel, hint }, index) => (
+              <Button key={rating} variant="outline" className="h-auto flex-col gap-0.5 py-2" onClick={() => onRate(rating)} title={`${hint} (${index + 1})`}>
+                <span>{ratingLabel}</span>
+                <span className="text-[0.7rem] font-normal text-muted-foreground">
+                  {intervalLabel(nextStageForRating(stage ?? 0, rating, stage === undefined))}
+                </span>
+              </Button>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="flex justify-center">
+          <Button onClick={onFlip}>Show answer</Button>
+        </div>
+      )}
+
+      <div className="flex min-h-8 items-center justify-center gap-3">
+        {footer}
+        {scheduleNote && <span className="text-xs text-muted-foreground">{scheduleNote}</span>}
       </div>
     </div>
   )

@@ -1,6 +1,6 @@
 export class AiNotConfiguredError extends Error {
   constructor() {
-    super("AI generation is not configured. Set ANTHROPIC_API_KEY in .env.local and restart the server.")
+    super("AI generation is not configured. Add a free Gemini API key (aistudio.google.com/apikey) as GEMINI_API_KEY in .env.local and restart the server.")
     this.name = "AiNotConfiguredError"
   }
 }

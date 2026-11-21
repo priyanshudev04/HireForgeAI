@@ -1,13 +1,13 @@
 "use client"
 
 import Link from "next/link"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { CheckCircle2, ListRestart, Sparkles, Target, XCircle } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
-import { Spinner } from "@/components/ui/spinner"
+import { Skeleton } from "@/components/ui/skeleton"
 import { ErrorState } from "@/components/shared/error-state"
 import { getTopicItem, recordQuizAttempt, useRevisionState, type TopicRef } from "@/lib/revision/store"
 import { ApiRequestError, generateQuiz, submitQuizAttempt } from "@/lib/theory/api"
@@ -89,11 +89,18 @@ export function QuizRunner({ topic, initialFocus = false }: { topic: TopicRef; i
 
   if (phase.name === "generating" || phase.name === "grading") {
     return (
-      <Card glass>
-        <CardContent className="flex min-h-60 flex-col items-center justify-center gap-3 p-8 text-center">
-          <Spinner />
-          <p className="text-sm font-medium text-foreground">{phase.name === "generating" ? "Writing your questions…" : "Scoring your answers…"}</p>
-          {phase.name === "generating" && <p className="text-xs text-muted-foreground">This usually takes 10 to 30 seconds.</p>}
+      <Card glass aria-busy="true">
+        <CardHeader>
+          <CardTitle>{phase.name === "generating" ? "Writing your questions…" : "Scoring your answers…"}</CardTitle>
+          <CardDescription>
+            {phase.name === "generating" ? "Free AI models can take 10 to 40 seconds. Hang tight." : "Just a moment."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Skeleton className="h-7 w-4/5" />
+          {[0, 1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-12 w-full rounded-xl" />
+          ))}
         </CardContent>
       </Card>
     )
@@ -107,17 +114,65 @@ export function QuizRunner({ topic, initialFocus = false }: { topic: TopicRef; i
     return <QuizResults topic={topic} questions={phase.questions} grade={phase.grade} onRestart={() => setPhase({ name: "idle" })} />
   }
 
-  const { questions, answers, current } = phase
+  return (
+    <QuizQuestions
+      questions={phase.questions}
+      answers={phase.answers}
+      current={phase.current}
+      onChange={(answers, current) => setPhase({ ...phase, answers, current })}
+      onSubmit={() => submit(phase.questions, phase.answers)}
+    />
+  )
+}
+
+function QuizQuestions({
+  questions,
+  answers,
+  current,
+  onChange,
+  onSubmit,
+}: {
+  questions: QuizQuestion[]
+  answers: Array<number | null>
+  current: number
+  onChange: (answers: Array<number | null>, current: number) => void
+  onSubmit: () => void
+}) {
   const question = questions[current]
   const selected = answers[current]
   const isLast = current === questions.length - 1
   const answeredCount = answers.filter((answer) => answer !== null).length
+  const unanswered = questions.length - answeredCount
 
   const choose = (index: number) => {
     const next = [...answers]
     next[current] = index
-    setPhase({ ...phase, answers: next })
+    onChange(next, current)
   }
+  const goTo = (index: number) => onChange(answers, Math.max(0, Math.min(questions.length - 1, index)))
+
+  // Keyboard: 1-4 or A-D to answer, arrows to move, Enter to continue.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.metaKey || event.ctrlKey || event.altKey) return
+      const target = event.target as HTMLElement | null
+      if (target && ["INPUT", "TEXTAREA"].includes(target.tagName)) return
+      const key = event.key.toLowerCase()
+      const numeric = Number(key)
+      if (numeric >= 1 && numeric <= question.options.length) return choose(numeric - 1)
+      const letter = key.length === 1 ? key.charCodeAt(0) - 97 : -1
+      if (letter >= 0 && letter < question.options.length) return choose(letter)
+      if (key === "arrowright") return goTo(current + 1)
+      if (key === "arrowleft") return goTo(current - 1)
+      if (key === "enter" && selected !== null) {
+        event.preventDefault()
+        if (isLast) onSubmit()
+        else goTo(current + 1)
+      }
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  })
 
   return (
     <Card glass>
@@ -127,13 +182,36 @@ export function QuizRunner({ topic, initialFocus = false }: { topic: TopicRef; i
             <CardTitle>
               Question {current + 1} of {questions.length}
             </CardTitle>
-            <CardDescription>{answeredCount} answered</CardDescription>
+            <CardDescription>
+              {answeredCount} of {questions.length} answered
+            </CardDescription>
           </div>
-          <Progress value={current + 1} max={questions.length} className="w-40" />
+          <nav aria-label="Jump to question" className="flex gap-1.5">
+            {questions.map((q, index) => (
+              <button
+                key={q.id}
+                type="button"
+                onClick={() => goTo(index)}
+                aria-label={`Question ${index + 1}${answers[index] !== null ? ", answered" : ""}`}
+                aria-current={index === current ? "step" : undefined}
+                className={cn(
+                  "size-7 rounded-full border text-xs font-semibold transition",
+                  index === current
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : answers[index] !== null
+                      ? "border-primary/40 bg-primary/10 text-primary"
+                      : "border-border text-muted-foreground hover:border-primary/40",
+                )}
+              >
+                {index + 1}
+              </button>
+            ))}
+          </nav>
         </div>
+        <Progress value={answeredCount} max={questions.length} className="mt-3" />
       </CardHeader>
       <CardContent className="space-y-8">
-        <h2 className="font-heading text-xl font-bold text-foreground sm:text-2xl">{question.question}</h2>
+        <h2 className="font-heading text-xl font-bold leading-snug text-foreground sm:text-2xl">{question.question}</h2>
 
         <div className="grid gap-3" role="radiogroup" aria-label="Answer options">
           {question.options.map((option, index) => (
@@ -144,13 +222,13 @@ export function QuizRunner({ topic, initialFocus = false }: { topic: TopicRef; i
               aria-checked={selected === index}
               onClick={() => choose(index)}
               className={cn(
-                "flex items-center gap-3 rounded-xl border px-4 py-3 text-left transition",
-                selected === index ? "border-primary bg-primary/10" : "border-border bg-muted/20 hover:border-primary/40 hover:bg-primary/5",
+                "flex items-center gap-3 rounded-xl border px-4 py-3 text-left transition focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                selected === index ? "border-primary bg-primary/10 shadow-sm" : "border-border bg-muted/20 hover:border-primary/40 hover:bg-primary/5",
               )}
             >
               <span
                 className={cn(
-                  "grid size-6 shrink-0 place-items-center rounded-full border text-xs font-semibold",
+                  "grid size-7 shrink-0 place-items-center rounded-full border text-xs font-semibold",
                   selected === index ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground",
                 )}
               >
@@ -161,16 +239,28 @@ export function QuizRunner({ topic, initialFocus = false }: { topic: TopicRef; i
           ))}
         </div>
 
-        <div className="flex items-center justify-between gap-3 border-t border-border/40 pt-4">
-          <Button variant="outline" disabled={current === 0} onClick={() => setPhase({ ...phase, current: current - 1 })}>
-            Previous
-          </Button>
-          {isLast ? (
-            <Button disabled={answeredCount === 0} onClick={() => submit(questions, answers)}>
-              Submit quiz
+        <div className="space-y-3 border-t border-border/40 pt-4">
+          <div className="flex items-center justify-between gap-3">
+            <Button variant="outline" disabled={current === 0} onClick={() => goTo(current - 1)}>
+              Previous
             </Button>
-          ) : (
-            <Button onClick={() => setPhase({ ...phase, current: current + 1 })}>{selected === null ? "Skip" : "Next question"}</Button>
+            {isLast ? (
+              <Button disabled={answeredCount === 0} onClick={onSubmit}>
+                Submit quiz
+              </Button>
+            ) : (
+              <Button onClick={() => goTo(current + 1)}>{selected === null ? "Skip" : "Next question"}</Button>
+            )}
+          </div>
+          <p className="hidden text-center text-xs text-muted-foreground sm:block">
+            {isLast && unanswered > 0
+              ? `${unanswered} unanswered ${unanswered === 1 ? "question counts" : "questions count"} as wrong.`
+              : "Tip: press 1 to 4 to answer and Enter to continue."}
+          </p>
+          {isLast && unanswered > 0 && (
+            <p className="text-center text-xs text-muted-foreground sm:hidden">
+              {unanswered} unanswered {unanswered === 1 ? "question counts" : "questions count"} as wrong.
+            </p>
           )}
         </div>
       </CardContent>
@@ -183,10 +273,15 @@ function QuizResults({ topic, questions, grade, onRestart }: { topic: TopicRef; 
     <div className="space-y-6">
       <Card glass>
         <CardHeader>
-          <CardTitle className="text-3xl">{grade.score}%</CardTitle>
-          <CardDescription>
-            {grade.correctCount} of {grade.total} correct · {grade.passed ? "Passed" : `Below the ${QUIZ_PASS_PERCENT}% pass mark`}
-          </CardDescription>
+          <div className="flex items-center gap-5">
+            <ScoreRing score={grade.score} passed={grade.passed} />
+            <div>
+              <CardTitle className="text-2xl">{grade.passed ? (grade.score === 100 ? "Perfect score" : "Passed") : "Keep practising"}</CardTitle>
+              <CardDescription>
+                {grade.correctCount} of {grade.total} correct · pass mark {QUIZ_PASS_PERCENT}%
+              </CardDescription>
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div
@@ -250,6 +345,30 @@ function QuizResults({ topic, questions, grade, onRestart }: { topic: TopicRef; 
           )
         })}
       </section>
+    </div>
+  )
+}
+
+function ScoreRing({ score, passed }: { score: number; passed: boolean }) {
+  const radius = 34
+  const circumference = 2 * Math.PI * radius
+  return (
+    <div className="relative grid size-20 shrink-0 place-items-center">
+      <svg viewBox="0 0 80 80" className="absolute inset-0 -rotate-90" aria-hidden="true">
+        <circle cx="40" cy="40" r={radius} fill="none" strokeWidth="7" className="stroke-muted" />
+        <circle
+          cx="40"
+          cy="40"
+          r={radius}
+          fill="none"
+          strokeWidth="7"
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={circumference * (1 - score / 100)}
+          className={cn("transition-[stroke-dashoffset] duration-700", passed ? "stroke-success" : "stroke-warning")}
+        />
+      </svg>
+      <span className="font-heading text-xl font-bold text-foreground">{score}%</span>
     </div>
   )
 }
