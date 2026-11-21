@@ -23,7 +23,7 @@ export interface LlmProvider {
 /** Error the API layer can map to a JSON response with a stable code. */
 export class AiError extends Error {
   constructor(
-    public readonly code: "AI_NOT_CONFIGURED" | "AI_RATE_LIMITED" | "AI_REFUSED" | "AI_PROVIDER_ERROR",
+    public readonly code: "AI_NOT_CONFIGURED" | "AI_RATE_LIMITED" | "AI_QUOTA_EXCEEDED" | "AI_PROVIDER_ERROR",
     message: string,
     public readonly status = 502,
   ) {
