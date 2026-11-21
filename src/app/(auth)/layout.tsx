@@ -1,19 +1,20 @@
 /**
  * (auth) route group layout
  *
- * Wraps: /sign-in, /sign-up, /forgot-password, /verify-email
+ * Wraps: /sign-in, /sign-up (Clerk-hosted components, catch-all routes so
+ * Clerk can run its multi-step flows such as OTP and SSO callbacks).
  *
- * Auth pages use a centered single-column layout with a subtle
- * branded background (PRD Part 5 Authentication spec).
- * No Sidebar, no marketing Footer.
- *
- * Phase 3 will implement the actual auth shell/background.
- * This layout stub preserves the route group structure now.
+ * Centered single-column layout with a subtle branded background
+ * (PRD Part 5 Authentication spec). No Sidebar, no marketing Footer.
  */
 export default function AuthLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  return <>{children}</>
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top,var(--primary)_0%,transparent_28%)] px-4 py-10">
+      {children}
+    </main>
+  )
 }
