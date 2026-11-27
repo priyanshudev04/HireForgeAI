@@ -1,24 +1,44 @@
 import Link from "next/link"
-import { Bot, Search, Send, Sparkles } from "lucide-react"
+import { Bot, MessageSquare, Sparkles } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { PageHeader } from "@/components/shared/page-header"
+import { MentorComposer } from "@/components/mentor/mentor-composer"
+import { requireUser } from "@/server/auth"
+import { getConversation, listConversations, NotFoundError } from "@/server/mentor/conversations"
 
-const conversations = [
-  { title: "Resume review", last: "Can you add measurable impact...", time: "2m ago", active: false },
-  { title: "Graph theory", last: "Let's reason through BFS vs DFS", time: "12m ago", active: true },
-  { title: "Project planning", last: "You can start with an API layer", time: "Thu", active: false },
-]
+const timeFormat = new Intl.RelativeTimeFormat("en", { numeric: "auto" })
 
-export default function MentorPage() {
+function relativeTime(date: Date | null) {
+  if (!date) return ""
+  const minutes = Math.round((date.getTime() - Date.now()) / 60_000)
+  if (Math.abs(minutes) < 60) return timeFormat.format(minutes, "minute")
+  const hours = Math.round(minutes / 60)
+  if (Math.abs(hours) < 24) return timeFormat.format(hours, "hour")
+  return timeFormat.format(Math.round(hours / 24), "day")
+}
+
+export default async function MentorPage({ searchParams }: { searchParams: Promise<{ c?: string }> }) {
+  const { c } = await searchParams
+  const user = await requireUser()
+  const { conversations } = await listConversations(user.id)
+
+  let active: Awaited<ReturnType<typeof getConversation>> | null = null
+  if (c) {
+    try {
+      active = await getConversation(user.id, c)
+    } catch (error) {
+      if (!(error instanceof NotFoundError)) throw error
+    }
+  }
+
   return (
     <div className="mx-auto w-full max-w-[1600px] space-y-6 p-4 sm:p-6 lg:p-8">
       <PageHeader
         title="AI Mentor"
         description="Ask questions, unblock your preparation, and plan your next step."
         actions={
-          <Button>
+          <Button render={<Link href="/mentor" />}>
             <Sparkles className="size-4" />
             New conversation
           </Button>
@@ -28,81 +48,76 @@ export default function MentorPage() {
       <section className="grid min-h-[720px] gap-4 overflow-hidden rounded-2xl border border-border xl:grid-cols-[330px_minmax(0,1fr)]">
         <aside className="border-b border-border bg-card xl:border-b-0 xl:border-r">
           <div className="border-b border-border p-4">
-            <div className="flex items-center gap-2 rounded-xl border border-border bg-background px-3 py-2">
-              <Search className="size-4 text-muted-foreground" />
-              <span className="text-sm text-muted-foreground">Search conversations</span>
-            </div>
+            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Your conversations</p>
           </div>
           <div className="space-y-2 p-3">
-            {conversations.map((conversation) => (
-              <Link key={conversation.title} href="/mentor" className="block">
-                <div className={`rounded-xl p-3 transition ${conversation.active ? "bg-primary/10 border border-primary/50" : "hover:bg-muted"}` }>
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-foreground">{conversation.title}</span>
-                    <span className="text-[10px] font-bold text-muted-foreground">{conversation.time}</span>
+            {conversations.length === 0 ? (
+              <p className="p-3 text-sm text-muted-foreground">No conversations yet. Ask your first question to start one.</p>
+            ) : (
+              conversations.map((conversation) => (
+                <Link key={conversation.id} href={`/mentor?c=${conversation.id}`} className="block">
+                  <div
+                    className={`rounded-xl p-3 transition ${
+                      conversation.id === active?.id ? "border border-primary/50 bg-primary/10" : "hover:bg-muted"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="truncate font-semibold text-foreground">{conversation.title ?? "Untitled"}</span>
+                      <span className="shrink-0 text-[10px] font-bold text-muted-foreground">
+                        {relativeTime(conversation.lastMessageAt)}
+                      </span>
+                    </div>
+                    {conversation.lastMessage ? (
+                      <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">{conversation.lastMessage.content}</p>
+                    ) : null}
                   </div>
-                  <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">{conversation.last}</p>
-                </div>
-              </Link>
-            ))}
+                </Link>
+              ))
+            )}
           </div>
         </aside>
 
         <main className="flex flex-col bg-background">
           <div className="border-b border-border p-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-wider text-primary">Conversation</p>
-                <h2 className="font-heading text-xl font-bold text-foreground">Graph theory</h2>
-              </div>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm">Regenerate response</Button>
-                <Button variant="outline" size="sm">Ask follow-up</Button>
-              </div>
-            </div>
+            <p className="text-xs font-bold uppercase tracking-wider text-primary">Conversation</p>
+            <h2 className="font-heading text-xl font-bold text-foreground">{active?.title ?? "New conversation"}</h2>
           </div>
 
           <div className="flex-1 space-y-4 overflow-auto p-6">
-            <div className="flex justify-start">
-              <div className="max-w-[88%] rounded-2xl rounded-tl-md bg-muted px-4 py-3 text-sm">
-                <div className="mb-1 flex items-center gap-2">
-                  <Bot className="size-4 text-primary" />
-                  <span className="font-bold text-primary">Mentor</span>
+            {!active || active.messages.length === 0 ? (
+              <div className="grid h-full place-items-center text-center text-sm text-muted-foreground">
+                <div className="space-y-2">
+                  <MessageSquare className="mx-auto size-6" />
+                  <p>Ask anything you are studying. Your chat is saved to your account.</p>
                 </div>
-                <p className="leading-6 text-foreground">For graph problems, start by identifying whether the constraint is reachability, shortest path, or cycle detection.</p>
               </div>
-            </div>
-
-            <div className="flex justify-end">
-              <div className="max-w-[88%] rounded-2xl rounded-tr-md border border-primary/30 bg-primary/10 px-4 py-3 text-sm">
-                <div className="mb-1 font-bold text-primary">You</div>
-                <p className="leading-6">I’m confused about DFS vs BFS for graph traversal.</p>
-              </div>
-            </div>
-
-            <div className="flex justify-start">
-              <div className="max-w-[88%] rounded-2xl rounded-tl-md bg-muted px-4 py-3 text-sm">
-                <div className="mb-1 flex items-center gap-2">
-                  <Bot className="size-4 text-primary" />
-                  <span className="font-bold text-primary">Mentor</span>
-                </div>
-                <p className="leading-6 text-foreground">Use BFS when the shortest edge count matters. Use DFS when you need to explore all reachable nodes or detect cycles.</p>
-              </div>
-            </div>
+            ) : (
+              active.messages.map((message) =>
+                message.role === "USER" ? (
+                  <div key={message.id} className="flex justify-end">
+                    <div className="max-w-[88%] rounded-2xl rounded-tr-md border border-primary/30 bg-primary/10 px-4 py-3 text-sm">
+                      <div className="mb-1 font-bold text-primary">You</div>
+                      <p className="whitespace-pre-wrap leading-6">{message.content}</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div key={message.id} className="flex justify-start">
+                    <div className="max-w-[88%] rounded-2xl rounded-tl-md bg-muted px-4 py-3 text-sm">
+                      <div className="mb-1 flex items-center gap-2">
+                        <Bot className="size-4 text-primary" />
+                        <span className="font-bold text-primary">Mentor</span>
+                      </div>
+                      <p className="whitespace-pre-wrap leading-6 text-foreground">{message.content}</p>
+                    </div>
+                  </div>
+                )
+              )
+            )}
           </div>
 
-          <div className="border-t border-border p-4">
-            <div className="flex items-center gap-2 rounded-2xl border border-border bg-background px-3 py-2">
-              <textarea className="min-h-[52px] flex-1 resize-none border-0 bg-transparent text-sm outline-none" placeholder="Ask your mentor..." />
-              <Button>
-                <Send className="size-4" />
-                Send
-              </Button>
-            </div>
-          </div>
+          <MentorComposer conversationId={active?.id ?? null} />
         </main>
       </section>
     </div>
   )
 }
-

@@ -1,11 +1,12 @@
+import { requireUser, unauthorized, UnauthorizedError } from "@/server/auth"
+import { listTopics } from "@/server/theory/queries"
+
 export async function GET() {
-  return Response.json({
-    ok: true,
-    data: {
-      topics: [
-        { slug: "operating-systems", title: "Operating Systems", level: "Intermediate" },
-        { slug: "dbms", title: "DBMS", level: "Intermediate" },
-      ],
-    },
-  })
+  try {
+    await requireUser()
+    return Response.json({ ok: true, data: { topics: await listTopics() } })
+  } catch (error) {
+    if (error instanceof UnauthorizedError) return unauthorized()
+    throw error
+  }
 }

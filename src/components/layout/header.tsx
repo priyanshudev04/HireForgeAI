@@ -3,6 +3,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { SignOutButton, useUser } from "@clerk/nextjs"
 import {
   Menu,
   Bell,
@@ -37,6 +38,9 @@ export function Header({
   className,
 }: HeaderProps) {
   const pathname = usePathname()
+  const { user } = useUser()
+  const email = user?.primaryEmailAddress?.emailAddress
+  const displayName = user?.fullName || user?.username || email || "Student"
 
   // Derive current page title from current route for App Header
   const currentPageTitle = React.useMemo(() => {
@@ -176,14 +180,14 @@ export function Header({
         <DropdownMenu
           trigger={
             <div className="ml-1 cursor-pointer">
-              <UserAvatar name="Alex Chen" subtext="PRO" size="sm" />
+              <UserAvatar name={displayName} avatarUrl={user?.imageUrl} size="sm" />
             </div>
           }
         >
           <DropdownMenuLabel>
             <div className="flex flex-col space-y-0.5">
-              <p className="text-sm font-medium text-foreground">Alex Chen</p>
-              <p className="text-xs text-muted-foreground">alex.chen@example.com</p>
+              <p className="text-sm font-medium text-foreground">{displayName}</p>
+              {email ? <p className="text-xs text-muted-foreground">{email}</p> : null}
             </div>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
@@ -196,7 +200,9 @@ export function Header({
 
           <DropdownMenuSeparator />
           <DropdownMenuItem destructive>
-            <Link href="/sign-in" className="w-full">Sign Out</Link>
+            <SignOutButton redirectUrl="/">
+              <button type="button" className="w-full text-left">Sign Out</button>
+            </SignOutButton>
           </DropdownMenuItem>
         </DropdownMenu>
       </div>

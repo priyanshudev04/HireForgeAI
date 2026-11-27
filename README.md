@@ -2,6 +2,25 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
+### Database and login setup
+
+Student data (mentor chats, quiz attempts, flashcard reviews) is stored in
+Supabase Postgres through Prisma, and sign-in is handled by Clerk.
+
+1. Copy `.env.example` to both `.env.local` and `.env`, then fill in:
+   - `DATABASE_URL` and `DIRECT_URL` from Supabase → Connect → ORMs → Prisma.
+   - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` from the Clerk dashboard.
+2. `pnpm install` (also generates the Prisma client).
+3. `pnpm db:migrate` creates the tables (the first migration adds the
+   `uuid_generate_v7()` function every table's id depends on).
+4. `pnpm db:seed` adds the default roles and the starter theory subjects,
+   quizzes and flashcards.
+
+The schema lives in `prisma/schema.prisma`. A student's `User` row is created
+the first time they make a signed-in request (`src/server/auth.ts`).
+
+### Development server
+
 First, run the development server:
 
 ```bash
